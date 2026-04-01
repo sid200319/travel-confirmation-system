@@ -42,8 +42,7 @@ exports.createBooking = async (req, res) => {
 
         res.json({
             message: "Booking Created",
-            bookingId,
-            token: token.token
+            bookingId
         });
 
     } catch (error) {
@@ -68,8 +67,20 @@ exports.confirmBooking = async (req, res) => {
             return res.send("⏰ Token expired");
         }
 
+        // find booking
+        const booking = await Booking.findOne({ bookingId: tokenData.bookingId });
+
+        if (!booking) {
+            return res.send("❌ Booking not found");
+        }
+
+        // prevent double confirmation
+        if (booking.status === "CONFIRMED") {
+            return res.send("⚠️ Booking already confirmed");
+        }
+
         // update booking
-        const booking = await Booking.findOneAndUpdate(
+        const updatedBooking = await Booking.findOneAndUpdate(
             { bookingId: tokenData.bookingId },
             {
                 status: "CONFIRMED",
@@ -79,9 +90,23 @@ exports.confirmBooking = async (req, res) => {
             { new: true }
         );
 
+        // delete token after use
+        await Token.deleteOne({ token });
+
+        // logging (important for proof)
+        console.log("Booking confirmed:", {
+            bookingId: updatedBooking.bookingId,
+            ip: req.ip,
+            time: new Date()
+        });
+
+        // response UI
         res.send(`
-            <h2>✅ Booking Confirmed</h2>
-            <p>Booking ID: ${booking.bookingId}</p>
+            <div style="font-family:Arial;text-align:center;padding:40px;">
+                <h1 style="color:green;">✅ Booking Confirmed</h1>
+                <p>Your booking has been successfully confirmed.</p>
+                <p><strong>Booking ID:</strong> ${updatedBooking.bookingId}</p>
+            </div>
         `);
 
     } catch (error) {
